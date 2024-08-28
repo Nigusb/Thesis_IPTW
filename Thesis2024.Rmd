@@ -1,0 +1,1654 @@
+---
+title: "MEPI Thesis_IPTW"
+author: "Nigus"
+date: "2024-01-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages 
+```{r}
+library(RPostgres)
+```
+
+
+# Establish a local connection to the remote database
+```{r}
+con <- dbConnect(RPostgres::Postgres(),
+                 dbname = "042_pcos_romina", 
+                 host = "localhost", port= 5431, 
+                 user = "nigus", 
+                 password = "owngEnTUaKPl")
+
+## close the connection
+dbDisconnect(con)
+
+## list the tables in the db
+dbListTables(con)
+```
+
+## Create objects of datasets 
+```{r}
+## read tables
+MBR <- dbReadTable(con, "s_r_mfr_mfr_mamma")  # medical birth registry 
+PR <- dbReadTable(con, "t_s_r_par_ov_m")  # patient registry outpatient 
+PR1 <- dbReadTable(con, "t_s_r_par_sv_m") # patient registry, in patient
+DR_mother <- dbReadTable(con, "s_r_lmed_m")  # drug registry for mothers
+PR_child <- dbReadTable(con, "t_r_par_sv_b")  # inpatient registry for children
+PR1_child <- dbReadTable(con, "t_r_par_ov_b") # outpatient registry for children
+DR_child <- dbReadTable(con, "r_lmed_b")  # drug registry for babies
+CoD_child <- dbReadTable(con, "r_dors_b") # cause of death registry
+
+my_table_romina <- dbReadTable(con, "mfr_mamma_forworking_nigus")
+```
+
+
+## Create a new data with the analytic variables
+```{r}
+pcos_dat <- my_table_romina %>%
+  filter(use_nigus == "TRUE") %>% 
+  dplyr::select(mlopnr, blopnr, setid, fall, ar, mfoddat, bfoddat, indatmhv, smdat, bpsmdat, bpuldat, mvikt, mlangd, rok0, snus0, rok1, snus1, rok2, snus2, diabetes_end, vaginal, secmark, kon, grvfv, grvbs, bvikt, paritet, malder, bordf2, msga, mlga, dateobesitydg, dgobesitybarn, dodsdatbarn, dateobesitydg_ov, dateobesitydg_sv, bfoddat_date, grdbs, lmp, smdat_date, daysfupbobes, yearsfupbobes, ageobesitydg, ageobesitydg_ov, ageobesitydg_sv, childobese, tetpreg, tetpreg0, tetpregcount, tetpregddd, tetpreg0, tetpregcount0, tetpregddd0, tetpreg1, tetpregcount1, tetpregddd1, tetpreg2, tetpregcount2, tetpregddd2, tetpreg3, tetpregcount3, tetpregddd3, penpreg, penpregcount, penpregddd, penpreg0, penpregcount0, penpregddd0, penpreg1, penpregcount1, penpregddd1, penpreg2, penpregcount2, penpregddd2, penpreg3, penpregcount3, penpregddd3, obetpreg, obetpregcount, obetpregddd, obetpreg0, obetpregcount0, obetpregddd0, obetpreg1, obetpregcount1, obetpregddd1, obetpreg2, obetpregcount2, obetpregddd2, obetpreg3, obetpregcount3, obetpregddd3, sulfpreg, sulfpregcount, sulfpregddd, sulfpreg0, sulfpregcount0, sulfpregddd0, sulfpreg1, sulfpregcount1, sulfpregddd1, sulfpreg2, sulfpregcount2, sulfpregddd1, sulfpreg3, sulfpregcount3, sulfpregddd3, macpreg, macpregcount, macpregddd, macpreg0, macpregcount0, macpregddd0, macpreg1, macpregcount1, macpregddd1, macpreg2, macpregcount2, macpregddd2, macpreg3, macpregcount3, macpregddd3, amipreg, amipregcount, amipregddd, amipreg0, amipregcount0, amipregddd0, amipreg1, amipregcount1, amipregddd1, amipreg2, amipregcount2, amipregddd2, amipreg3, amipregcount3, amipregddd3, quipreg, quipregcount, quipregddd, quipreg0, quipregcount0, quipregddd0, quipreg1, quipregcount1, quipregddd1, quipreg2, quipregcount2, quipregddd2, quipreg3, quipregcount3, quipregddd3, oatbreg, oatbregcount, oatbregddd, oatbreg0, oatbregcount0, oatbregddd0, oatbreg1, oatbregcount1, oatbregddd1, oatbreg2, oatbregcount2, oatbregddd2, oatbreg3, oatbregcount3, oatbregddd3, nitimipreg, nitimipregcount, nitimipregddd, nitimipreg0, nitimipregcount0, nitimipregddd0, nitimipreg1, nitimipregcount1, nitimipregddd1, nitimipreg2, nitimipregcount2, nitimipregddd2, nitimipreg3, nitimipregcount3, nitimipregddd3, gynpreg, gynpregcount, gynpregddd, gynpreg0, gynpregcount0, gynpregddd0, gynpreg1, gynpregcount1, gynpregddd1, gynpreg2, gynpregcount2, gynpregddd2, gynpreg3, gynpregcount3, gynpregddd3, h2rapreg, h2rapregcount, h2rapregddd, h2rapreg0, h2rapregcount0, h2rapregddd0, h2rapreg1, h2rapregcount1, h2rapregddd1, h2rapreg2, h2rapregcount2, h2rapregddd2, h2rapreg3, h2rapregcount3, h2rapregddd3, ppipreg, ppipregcount, ppipregddd, ppipreg0, ppipregcount0, ppipregddd0, ppipreg1, ppipregcount1, ppipregddd1, ppipreg2, ppipregcount2, ppipregddd2, ppipreg3, ppipregcount3, ppipregddd3, metforpreg, metforpregcount, metforpregddd, metforpreg0, metforpregcount0, metforpregddd0, metforpreg1, metforpregcount1, metforpregddd1, metforpreg2, metforpregcount2, metforpregddd2, metforpreg3, metforpregcount3, metforpregddd3, pcos_hdia_dia, anyatbchild, anyatbchildcount, anyatbchildddd, anyatbchild2y, anyatbchild2ycount, anyatbchild2yddd, gestdiabmfr, gestdiab_ov, gestdiab_sv, gestdiab, dm_mfr, dm_ov, dm_sv, diabmellunderpreg, pe_mfr, pe_sv, pe_ov, preeclampunderpreg, eclampsia_mfr, eclampsia_sv, eclampsia_ov, eclampsiapreg, hypertension_mfr, hypertension_ov, hypertension_sv, hypertension, hypothyroidism_mfr, hypothyroidism_ov, hypothyroidism_sv, hypothyroidism_end)
+```
+
+
+## Recode variables 
+```{r}
+pcos_dat <- pcos_dat %>% mutate(across(where(is.character), ~na_if(., "")))  # empty cells of character columns replaced by NAs
+
+## Maternal age
+pcos_dat$age_mom <- as.numeric(pcos_dat$malder)  
+pcos_dat <- mutate(pcos_dat, age_cat= case_when(age_mom <25~ "<25", age_mom >=25 & age_mom <30~ "25-29", age_mom >=30 & age_mom <35~"30-34", age_mom >=35~">=35")) # age category 
+
+## Parity
+pcos_dat <- mutate(pcos_dat, parity_cat= case_when(paritet==1~ "primipara", paritet>=2~ "multipara"))
+
+## BMI
+pcos_dat$height <- as.numeric(pcos_dat$mlangd)/100  # converts height in meters
+pcos_dat$BMI <- as.numeric(pcos_dat$mvikt) / (pcos_dat$height^2)  # creates a new variable 'BMI'
+pcos_dat <- mutate(pcos_dat, BMI_cat = case_when(BMI <18.5 ~ "Underweight", BMI >=18.5 & BMI <25.0 ~ "Normal", BMI >=25 & BMI <30.0 ~ "Overweight", BMI >=30.0 ~ "Obese"))  # category of BMI
+
+## PCOS
+pcos_dat$PCOS <- ifelse(pcos_dat$pcos_hdia_dia == "TRUE", "Yes", "No")
+### consider using 'pcos_hdia_dia'
+
+## smoking/snuff during pregnancy 
+pcos_dat$smok_snuf_px <- ifelse(pcos_dat$rok2 %in% c("2", "3") | pcos_dat$snus2 == "1", "Yes", "No")
+pcos_dat$smok_snuf_px[is.na(pcos_dat$smok_snuf_px)] <- "No"  # replaces NAs with 'No'
+
+## DM
+pcos_dat$DM <- ifelse(pcos_dat$diabetes_end == "TRUE", "Yes", "No")
+
+## GDM
+pcos_dat$GDM <- ifelse(pcos_dat$gestdiab == "TRUE", "Yes", "No")
+
+## Hypothyroidism
+pcos_dat$hypoth_rec <- ifelse(pcos_dat$hypothyroidism_end == "TRUE", "Yes", "No")
+
+## GA
+pcos_dat$dob <- as.Date(pcos_dat$bfoddat, format = "%Y%m%d")  # date of birth for baby
+pcos_dat$lmp_new <- as.Date(pcos_dat$smdat, format = "%Y%m%d")  # LMP date
+pcos_dat$GA <- as.numeric(pcos_dat$dob - pcos_dat$lmp_new)  # GA in days
+pcos_dat <- mutate(pcos_dat, GA_cat = case_when(grdbs <259 ~"Preterm", grdbs >=259 & grdbs <288 ~"Term", grdbs >=288 ~"Postterm"))  # GA category 
+ ## calculate grdbs to categorize GA--> replace the above code
+
+## CS
+pcos_dat$CS <- ifelse(pcos_dat$secmark %in% c("0", "1"), ifelse(pcos_dat$secmark == "1", "Yes", "No"), NA)
+
+## Gender
+pcos_dat$Gender <- ifelse(pcos_dat$kon == "1", "Male", ifelse(pcos_dat$kon == "2", "Female",NA))
+
+## SGA
+pcos_dat$SGA <- ifelse(pcos_dat$msga == "1", "Yes", ifelse(pcos_dat$msga == "0", "No", NA))
+
+## LGA
+pcos_dat$LGA <- ifelse(pcos_dat$mlga == "1", "Yes", ifelse(pcos_dat$mlga == "0", "No", NA))
+
+## AGA
+pcos_dat <- pcos_dat %>%
+  mutate(AGA = (SGA == 'No' & LGA == 'No'))
+pcos_dat$AGA <- ifelse(pcos_dat$AGA == "TRUE", "Yes", ifelse(pcos_dat$AGA == "FALSE", "No", NA))
+
+## birth weight based on weight and GA
+pcos_dat <- pcos_dat %>%
+  mutate(
+    size_GA = case_when(
+      SGA == 'Yes' ~ 'SGA',
+      LGA == 'Yes' ~ 'LGA',
+      AGA == 'Yes' ~ 'AGA',
+      TRUE ~ NA_character_ # Keep missing values as NA
+    )
+  )
+
+## Birth weight based on weight at birth
+pcos_dat <- mutate(pcos_dat, Bwt_cat = case_when(bvikt <2500 ~ "LBW", bvikt >=2500 & bvikt <4000 ~ "Normal", bvikt >=4000 ~"Macrosomia"))
+
+## Metformin use
+pcos_dat$metformin_use <- apply(pcos_dat[,c('metforpreg0', 'metforpreg1', 'metforpreg2', 'metforpreg3')], 1, any, na.rm= TRUE)
+pcos_dat$metformin_use <- ifelse(pcos_dat$metformin_use, "Yes", "No")
+
+## Early-life antibiotic use in infants
+pcos_dat$earlyAb_use <- ifelse(pcos_dat$anyatbchild == "TRUE" | pcos_dat$anyatbchild2y == "TRUE", "Yes", "No")
+
+
+
+### recode period as binary
+pcos_dat$tetpreg0 <- ifelse(pcos_dat$tetpreg0 == "TRUE", "Yes","No")
+pcos_dat$penpreg0 <- ifelse(pcos_dat$penpreg0 == "TRUE", "Yes","No")
+pcos_dat$obetpreg0 <- ifelse(pcos_dat$obetpreg0 == "TRUE", "Yes","No")
+pcos_dat$sulfpreg0 <- ifelse(pcos_dat$sulfpreg0 == "TRUE", "Yes","No")
+pcos_dat$macpreg0 <- ifelse(pcos_dat$macpreg0 == "TRUE", "Yes","No")
+pcos_dat$amipreg0 <- ifelse(pcos_dat$amipreg0 == "TRUE", "Yes","No")
+pcos_dat$quipreg0 <- ifelse(pcos_dat$quipreg0 == "TRUE", "Yes","No")
+pcos_dat$oatbreg0 <- ifelse(pcos_dat$oatbreg0 == "TRUE", "Yes","No")
+pcos_dat$nitimipreg0 <- ifelse(pcos_dat$nitimipreg0 == "TRUE", "Yes","No")
+
+pcos_dat$penpreg1[is.na(pcos_dat$penpreg1)] <- "No"
+pcos_dat$penpreg1 <- ifelse(pcos_dat$penpreg1 == "TRUE", "Yes","No")
+pcos_dat$penpreg2 <- ifelse(pcos_dat$penpreg2 == "TRUE", "Yes","No")
+pcos_dat$penpreg3 <- ifelse(pcos_dat$penpreg3 == "TRUE", "Yes","No")
+pcos_dat$obetpreg1 <- ifelse(pcos_dat$obetpreg1 == "TRUE", "Yes","No")
+pcos_dat$obetpreg2 <- ifelse(pcos_dat$obetpreg2 == "TRUE", "Yes","No")
+pcos_dat$obetpreg3 <- ifelse(pcos_dat$obetpreg3 == "TRUE", "Yes","No")
+pcos_dat$amipreg1 <- ifelse(pcos_dat$amipreg1 == "TRUE", "Yes","No")
+pcos_dat$amipreg2 <- ifelse(pcos_dat$amipreg2 == "TRUE", "Yes","No")
+pcos_dat$amipreg3 <- ifelse(pcos_dat$amipreg3 == "TRUE", "Yes","No")
+pcos_dat$macpreg1 <- ifelse(pcos_dat$macpreg1 == "TRUE", "Yes","No")
+pcos_dat$macpreg2 <- ifelse(pcos_dat$macpreg2 == "TRUE", "Yes","No")
+pcos_dat$macpreg3 <- ifelse(pcos_dat$macpreg3 == "TRUE", "Yes","No")
+pcos_dat$tetpreg1 <- ifelse(pcos_dat$tetpreg1 == "TRUE", "Yes","No")
+pcos_dat$tetpreg2 <- ifelse(pcos_dat$tetpreg2 == "TRUE", "Yes","No")
+pcos_dat$tetpreg3 <- ifelse(pcos_dat$tetpreg3 == "TRUE", "Yes","No")
+pcos_dat$sulfpreg1 <- ifelse(pcos_dat$sulfpreg1 == "TRUE", "Yes","No")
+pcos_dat$sulfpreg2 <- ifelse(pcos_dat$sulfpreg2 == "TRUE", "Yes","No")
+pcos_dat$sulfpreg3 <- ifelse(pcos_dat$sulfpreg3 == "TRUE", "Yes","No")
+pcos_dat$quipreg1 <- ifelse(pcos_dat$quipreg1 == "TRUE", "Yes","No")
+pcos_dat$quipreg2 <- ifelse(pcos_dat$quipreg2 == "TRUE", "Yes","No")
+pcos_dat$quipreg3 <- ifelse(pcos_dat$quipreg3 == "TRUE", "Yes","No")
+pcos_dat$nitimipreg1 <- ifelse(pcos_dat$nitimipreg1 == "TRUE", "Yes","No")
+pcos_dat$nitimipreg2 <- ifelse(pcos_dat$nitimipreg2 == "TRUE", "Yes","No")
+pcos_dat$nitimipreg3 <- ifelse(pcos_dat$nitimipreg3 == "TRUE", "Yes","No")
+pcos_dat$oatbreg1 <- ifelse(pcos_dat$oatbreg1 == "TRUE", "Yes","No")
+pcos_dat$oatbreg2 <- ifelse(pcos_dat$oatbreg2 == "TRUE", "Yes","No")
+pcos_dat$oatbreg3 <- ifelse(pcos_dat$oatbreg3 == "TRUE", "Yes","No")
+pcos_dat$gynpreg1 <- ifelse(pcos_dat$gynpreg1 == "TRUE", "Yes","No")
+pcos_dat$gynpreg2 <- ifelse(pcos_dat$gynpreg2 == "TRUE", "Yes","No")
+pcos_dat$gynpreg3 <- ifelse(pcos_dat$gynpreg3 == "TRUE", "Yes","No")
+
+pcos_dat$preconception <- ifelse(pcos_dat$tetpreg0 == "Yes" | pcos_dat$penpreg0 == "Yes" | pcos_dat$obetpreg0 == "Yes" | pcos_dat$sulfpreg0 == "Yes" | pcos_dat$macpreg0 == "Yes" | pcos_dat$amipreg0 == "Yes" | pcos_dat$quipreg0 == "Yes" | pcos_dat$oatbreg0 =="Yes" |pcos_dat$nitimipreg0 == "Yes" | pcos_dat$gynpreg0 == "Yes", "Yes", "No")
+
+pcos_dat$firstTm <- ifelse(pcos_dat$tetpreg1 == "Yes" | pcos_dat$penpreg1 == "Yes" | pcos_dat$obetpreg1 == "Yes" | pcos_dat$sulfpreg1 == "Yes" | pcos_dat$macpreg1 == "Yes" | pcos_dat$amipreg1 == "Yes" | pcos_dat$quipreg1 == "Yes" | pcos_dat$oatbreg1 =="Yes" |pcos_dat$nitimipreg1 == "Yes" | pcos_dat$gynpreg1 == "Yes", "Yes", "No")
+
+pcos_dat$secondTm <- ifelse(pcos_dat$tetpreg2 == "Yes" | pcos_dat$penpreg2 == "Yes" | pcos_dat$obetpreg2 == "Yes" | pcos_dat$sulfpreg2 == "Yes" | pcos_dat$macpreg2 == "Yes" | pcos_dat$amipreg2 == "Yes" | pcos_dat$quipreg2 == "Yes" | pcos_dat$oatbreg2 =="Yes" |pcos_dat$nitimipreg2 == "Yes" | pcos_dat$gynpreg2 == "Yes", "Yes", "No")
+
+pcos_dat$thirdTm <- ifelse(pcos_dat$tetpreg3 == "Yes" | pcos_dat$penpreg3 == "Yes" | pcos_dat$obetpreg3 == "Yes" | pcos_dat$sulfpreg3 == "Yes" | pcos_dat$macpreg3 == "Yes" | pcos_dat$amipreg3 == "Yes" | pcos_dat$quipreg3 == "Yes" | pcos_dat$oatbreg3 =="Yes" |pcos_dat$nitimipreg3 == "Yes" | pcos_dat$gynpreg3 == "Yes", "Yes", "No")
+
+pcos_dat_missind$ab_period <- ifelse(pcos_dat_missind$preconception == "Yes", "preconception",
+                                  ifelse(pcos_dat_missind$firstTm == "Yes", "first TM",
+                                  ifelse(pcos_dat_missind$secondTm == "Yes", "second TM",
+                                  ifelse(pcos_dat_missind$thirdTm == "Yes", "third TM", "no"))))
+
+
+### recode class as binary
+
+table1(~ penpreg + penpreg0 +penpreg1 + penpreg2 + penpreg3+ obetpreg0+obetpreg1+obetpreg2+obetpreg3+ amipreg0+amipreg1 + amipreg2+amipreg3 +macpreg0+macpreg1+macpreg2+macpreg3 +tetpreg0+tetpreg1+tetpreg2+tetpreg3 +sulfpreg0+sulfpreg1+sulfpreg2+sulfpreg3 +quipreg0+quipreg1+quipreg2+quipreg3 +nitimipreg0+nitimipreg1+nitimipreg2+nitimipreg3 +oatbreg0+oatbreg1+oatbreg2+oatbreg3 +gynpreg0+gynpreg1+gynpreg2+gynpreg3, data = pcos_dat)
+
+pcos_dat$penicillin <- ifelse(pcos_dat$penpreg1 == "Yes" | pcos_dat$penpreg2 == "Yes" | pcos_dat$penpreg3 == "Yes", "Yes", "No")
+pcos_dat$betalctm <- ifelse(pcos_dat$obetpreg1 == "Yes" | pcos_dat$obetpreg2 == "Yes" | pcos_dat$obetpreg3 == "Yes", "Yes", "No")
+pcos_dat$aminoglycoside <- ifelse(pcos_dat$amipreg1 == "Yes" | pcos_dat$amipreg2 == "Yes" | pcos_dat$amipreg3 == "Yes", "Yes", "No")
+pcos_dat$macrolides <- ifelse(pcos_dat$macpreg1 == "Yes" | pcos_dat$macpreg2 == "Yes" | pcos_dat$macpreg3 == "Yes", "Yes", "No")
+pcos_dat$ttc <- ifelse(pcos_dat$tetpreg1 == "Yes" | pcos_dat$tetpreg2 == "Yes" | pcos_dat$tetpreg3 == "Yes", "Yes", "No")
+pcos_dat$sulfT <- ifelse(pcos_dat$sulfpreg1 == "Yes" | pcos_dat$sulfpreg2 == "Yes" | pcos_dat$sulfpreg3 == "Yes", "Yes", "No")
+pcos_dat$quinolone <- ifelse(pcos_dat$quipreg1 == "Yes" | pcos_dat$quipreg2 == "Yes" | pcos_dat$quipreg3 == "Yes", "Yes", "No")
+pcos_dat$nitro <- ifelse(pcos_dat$nitimipreg1 == "Yes" | pcos_dat$nitimipreg2 == "Yes" | pcos_dat$nitimipreg3 == "Yes", "Yes", "No")
+pcos_dat$gynecol <- ifelse(pcos_dat$gynpreg1 == "Yes" | pcos_dat$gynpreg2 == "Yes" | pcos_dat$gynpreg3 == "Yes", "Yes", "No")
+pcos_dat$others <- ifelse(pcos_dat$oatbreg1 == "Yes" | pcos_dat$oatbreg2 == "Yes" | pcos_dat$oatbreg3 == "Yes", "Yes", "No")
+
+## Antenatal antibiotic use (any)
+pcos_dat$antenatal_ab <- ifelse(pcos_dat$firstTm == "Yes" | 
+                                   pcos_dat$secondTm == "Yes" | 
+                                   pcos_dat$thirdTm == "Yes", "Yes", "No")
+                                   
+
+## Number of antibiotic prescriptions
+pcos_dat$number_prescription <- rowSums(pcos_dat[, c('tetpregcount1', 'tetpregcount2', 'tetpregcount3', 'penpregcount1', 'penpregcount2', 'penpregcount3', 'obetpregcount1', 'obetpregcount2', 'obetpregcount3', 'sulfpregcount1', 'sulfpregcount2', 'sulfpregcount3', 'macpregcount1', 'macpregcount2', 'macpregcount3', 'amipregcount1', 'amipregcount2', 'amipregcount3', 'quipregcount1', 'quipregcount2', 'quipregcount3', 'oatbregcount1', 'oatbregcount2', 'oatbregcount3', 'nitimipregcount1', 'nitimipregcount2', 'nitimipregcount3', 'gynpregcount1', 'gynpregcount2', 'gynpregcount3')], na.rm = TRUE)  # count in continuous form 
+pcos_dat <- mutate(pcos_dat, mom_presc_cat= case_when(number_prescription ==0~ 0, number_prescription  ==1~1, number_prescription ==2~2, number_prescription >=3~3, TRUE ~ NA_integer_
+))  # category of prescription counts 
+
+
+## childhood obesity
+pcos_dat$obesity <- ifelse(pcos_dat$childobese == "TRUE", 1,0) # recodes obesity to chr
+pcos_dat$time_obese <- as.numeric(format(pcos_dat$dateobesitydg, "%Y")) - (as.numeric(format(pcos_dat$dob, "%Y"))) # computes time variable
+
+## calendar time
+pcos_dat$calendar_year <- as.numeric(pcos_dat$ar)
+```
+
+
+## filter dataset
+```{r}
+pcos_dat1 <- pcos_dat %>% 
+filter(time_obese >=2 & time_obese <=18 & ar >= "2005" & bordf2 == "1")
+pcostwn <- pcos_dat1 %>% 
+  filter(bordf2 == "1")
+pcosobs <- pcostwn %>% 
+  filter(time_obese >1 & time_obese <=18)
+
+pcos_dat2 <- pcos_dat1 %>% 
+  dplyr::select(mlopnr, setid, age_cat, BMI_cat, smok_snuf_px, parity_cat, DM, PCOS, metformin_use, GDM, hypoth_rec, GA_cat, CS, size_GA, Bwt_cat, Gender, earlyAb_use, calendar_year, antenatal_ab, preconception, firstTm, secondTm, thirdTm, penicillin, betalctm, aminoglycoside, macrolides, ttc, sulfT, quinolone, nitro, gynecol, others, mom_presc_cat)
+```
+
+
+
+## descriptive table by PCOS+-ab
+```{r}
+library(gtsummary)
+
+# Generate summary table
+table_pcosAb <- pcos_dat1 %>% 
+  select(PCOS, antenatal_ab, merged_age, parity_cat, BMI_cat, smok_snuf_px, DM, metformin_use, GDM, hypoth_rec, GA_cat, CS, SGA, LGA, Bwt_cat, Gender, earlyAb_use, obesity) %>% 
+  mutate(PCOS = paste("PCOS", PCOS)) %>% 
+  mutate_at(vars(merged_age, parity_cat, BMI_cat, smok_snuf_px, DM, metformin_use, GDM, hypoth_rec, GA_cat, CS, SGA, LGA, birthweight, Bwt_cat, Gender, earlyAb_use, obesity), ~fct_na_value_to_level(as.factor(.), level = "Missing")) %>%
+  tbl_strata(strata = PCOS,
+             .tbl_fun = ~ .x %>% 
+               tbl_summary(by= anyAbUse_mom) %>% 
+               add_n(),
+             .header = "**{strata}**, N = {n} ({p}%)",
+            ) 
+# View the summary table 
+table_pcosAb
+
+### The code below returns the figures with two decimals, ensuring the totals 100%
+table_pcosAb <- pcos_dat1 %>% 
+  dplyr::select(PCOS, antenatal_ab, age_cat, parity_cat, BMI_cat, preconception, smok_snuf_px, DM, metformin_use, GDM, hypoth_rec, GA_cat, CS, size_GA, Bwt_cat, Gender, earlyAb_use, obesity) %>% 
+  mutate(PCOS = paste("PCOS", PCOS)) %>% 
+  mutate_at(vars(age_cat, parity_cat, BMI_cat, preconception, smok_snuf_px, DM, metformin_use, GDM, hypoth_rec, GA_cat, CS, size_GA, Bwt_cat, Gender, earlyAb_use, obesity), ~fct_na_value_to_level(as.factor(.), level = "Missing")) %>%
+  tbl_strata(strata = PCOS,
+             .tbl_fun = ~ .x %>% 
+               tbl_summary(by= antenatal_ab,
+                           digits = list(all_categorical() ~ 2)),
+             .header = "**{strata}**, N = {n} ({p}%)",
+            )
+table_pcosAb
+
+library(knitr)
+kable(table_pcosAb)
+```
+
+
+## Antibiotic use description
+```{r}
+# Count the number of "Yes" and "No" responses
+count_penicillin <- table(pcos_dat_missind$obesity)
+
+# Calculate the proportion of "Yes" responses
+prop_yes <- count_penicillin["1"] / sum(count_penicillin)
+
+# Calculate the total number of responses
+total_responses <- sum(count_penicillin)
+
+# Calculate the standard error of the proportion
+se_prop <- sqrt(prop_yes * (1 - prop_yes) / total_responses)
+
+# Calculate the confidence interval
+ci_lower <- prop_yes - 1.96 * se_prop
+ci_upper <- prop_yes + 1.96 * se_prop
+
+# Display the results
+prevalence <- prop_yes * 100
+ci_lower <- ci_lower * 100
+ci_upper <- ci_upper * 100
+
+cat("Prevalence (%): ", prevalence, "\n")
+cat("95% CI: (", ci_lower, ", ", ci_upper, ")\n")
+
+library(gtsummary)
+table_Ab <- pcos_dat1 %>% 
+  dplyr::select(PCOS, preconception, antenatal_ab, penicillin, betalctm, macrolides, ttc, nitro, sulfT, quinolone, gynecol, others, mom_presc_cat, firstTm, secondTm, thirdTm, earlyAb_use) %>% 
+  tbl_summary(
+    by = PCOS
+  ) %>%
+  add_n() %>%
+  modify_header(all_stat_cols(FALSE) ~ "**{level}**, N = {n} ({p}%)")
+table_Ab
+kable(table_Ab)
+```
+
+
+## Graphs for antibiotic use
+```{r}
+# Antibiotic class
+table_Ab <- pcos_dat1 %>% 
+  dplyr::select(PCOS, penicillin, betalctm, macrolides, ttc, nitro, sulfT, quinolone, gynecol, others) %>% 
+  tbl_summary(
+    by = PCOS
+  ) %>%
+  add_n() %>%
+  modify_header(all_stat_cols(FALSE) ~ "**{level}**, N = {n} ({p}%)")
+
+# Extracting summary table as a data frame
+summary_df <- as_tibble(table_Ab$table_body)
+
+# Extract the relevant columns (assume the columns are named correctly based on your example)
+antibiotic_data <- summary_df %>%
+  filter(label %in% c("penicillin", "betalctm", "macrolides", "ttc", 
+                      "nitro", "sulfT", "quinolone", 
+                      "gynecol", "others")) %>%
+  dplyr::select(label, stat_1, stat_2) %>%
+  rename(Antibiotic_Class = label, No_PCOS = stat_1, PCOS = stat_2)
+
+# Extract percentages from the string and convert to numeric
+antibiotic_data <- antibiotic_data %>%
+  mutate(
+    No_PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", No_PCOS)),
+    PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", PCOS))
+  )
+
+# Set the factor levels for Antibiotic_Class to maintain the specified order
+antibiotic_data$Antibiotic_Class <- factor(antibiotic_data$Antibiotic_Class, 
+                                           levels = c("penicillin", "betalctm", "macrolides", "ttc", 
+                                                      "nitro", "sulfT", "quinolone", 
+                                                      "gynecol", "others"),
+                                           labels = c("Penicillins", "Other beta-lactams", "Macrolides", "Tetracyclines", 
+                                                      "Nitromidazoles", "Sulfamethoxazole-Trimethoprim", "Quinolones", 
+                                                      "Gynecological antibiotics", "Other antibacterials"))
+# Convert the data to long format for ggplot2
+antibiotic_data_long <- antibiotic_data %>%
+  pivot_longer(cols = c(No_PCOS, PCOS), names_to = "PCOS_Status", values_to = "Percentage")
+
+# Custom colors for the legend
+custom_colors <- c("No_PCOS" = "#87CEFA", "PCOS" = "#CD6889")
+
+# Plot the grouped bar chart
+ggplot(antibiotic_data_long, aes(x = Antibiotic_Class, y = Percentage, fill = PCOS_Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Antibiotic classes",
+       x = "",
+       y = "%",
+       fill = "") +
+    scale_fill_manual(values = custom_colors) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),axis.text.x = element_text(angle = 30, hjust = 0.8),
+        legend.position = "") +
+  theme(axis.text.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+         axis.text.y = element_text(size = 20),
+         plot.title = element_text(size = 24),
+         legend.text = element_text(size = 16))
+        
+
+
+
+
+
+# Number of prescriptions
+table_Ab <- pcos_dat1 %>% 
+  dplyr::select(PCOS, mom_presc_cat) %>% 
+  tbl_summary(
+    by = PCOS
+  ) %>%
+  add_n() %>%
+  modify_header(all_stat_cols(FALSE) ~ "**{level}**, N = {n} ({p}%)")
+
+# Extracting summary table as a data frame
+summary_df <- as_tibble(table_Ab$table_body)
+
+# Extract the relevant columns (assume the columns are named correctly based on your example)
+antibiotic_data <- summary_df %>%
+  filter(label %in% c("1", "2", "3")) %>%
+  dplyr::select(label, stat_1, stat_2) %>%
+  rename(number_presc = label, No_PCOS = stat_1, PCOS = stat_2)
+
+# Extract percentages from the string and convert to numeric
+antibiotic_data <- antibiotic_data %>%
+  mutate(
+    No_PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", No_PCOS)),
+    PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", PCOS))
+  )
+
+# Set the factor levels for number of prescriptions to maintain the specified order
+antibiotic_data$number_presc <- factor(antibiotic_data$number_presc, 
+                                           levels = c("1", "2", "3"),
+                                           labels = c("One", "Two", "Three or more"))
+# Convert the data to long format for ggplot2
+antibiotic_data_long <- antibiotic_data %>%
+  pivot_longer(cols = c(No_PCOS, PCOS), names_to = "PCOS_Status", values_to = "Percentage")
+
+# Custom colors for the legend
+custom_colors <- c("No_PCOS" = "#87CEFA", "PCOS" = "#CD6889")
+
+# Plot the grouped bar chart
+ ggplot(antibiotic_data_long, aes(x = number_presc, y = Percentage, fill = PCOS_Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Number of prescriptions",
+       x = "",
+       y = "%",
+       fill = "") +
+    scale_fill_manual(values = custom_colors) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),axis.text.x = element_text(angle = 30, hjust = 0.8),
+        legend.position = "") +
+  theme(axis.text.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text.y = element_text(size = 20),
+        plot.title = element_text(size = 24),
+        legend.text = element_text(size = 16))
+
+
+
+
+
+# Period of exposure
+table_Ab <- pcos_dat1 %>% 
+  dplyr::select(PCOS, firstTm, secondTm, thirdTm) %>% 
+  tbl_summary(
+    by = PCOS
+  ) %>%
+  add_n() %>%
+  modify_header(all_stat_cols(FALSE) ~ "**{level}**, N = {n} ({p}%)")
+
+# Extracting summary table as a data frame
+summary_df <- as_tibble(table_Ab$table_body)
+
+# Extract the relevant columns (assume the columns are named correctly based on your example)
+antibiotic_data <- summary_df %>%
+  filter(label %in% c("firstTm", "secondTm", "thirdTm")) %>%
+  dplyr::select(label, stat_1, stat_2) %>%
+  rename(period = label, No_PCOS = stat_1, PCOS = stat_2)
+
+# Extract percentages from the string and convert to numeric
+antibiotic_data <- antibiotic_data %>%
+  mutate(
+    No_PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", No_PCOS)),
+    PCOS = as.numeric(sub(".*\\((.*)\\%\\).*", "\\1", PCOS))
+  )
+
+# Set the factor levels for number of prescriptions to maintain the specified order
+antibiotic_data$period <- factor(antibiotic_data$period, 
+                                           levels = c("firstTm", "secondTm", "thirdTm"),
+                                           labels = c("First", "Second", "Third"))
+# Convert the data to long format for ggplot2
+antibiotic_data_long <- antibiotic_data %>%
+  pivot_longer(cols = c(No_PCOS, PCOS), names_to = "PCOS_Status", values_to = "Percentage")
+
+# Custom colors for the legend
+custom_colors <- c("No_PCOS" = "#87CEFA", "PCOS" = "#CD6889")
+
+# Plot the grouped bar chart
+ ggplot(antibiotic_data_long, aes(x = period, y = Percentage, fill = PCOS_Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Period of exposure (trimester)",
+       x = "",
+       y = "%",
+       fill = "") +
+    scale_fill_manual(values = custom_colors) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),axis.text.x = element_text(angle = 30, hjust = 0.8),
+        legend.position = "right") +
+  theme(axis.text.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text.y = element_text(size = 20),
+        plot.title = element_text(size = 24),
+        legend.text = element_text(size = 16))
+
+
+```
+
+
+
+## Age of obesity diagnosis
+```{r}
+obesity_count <- pcos_dat1 %>% group_by(time_obese) %>% count(obesity)
+
+obese_child <- pcos_dat1 %>% 
+  filter(obesity== 1)
+## plot
+ggplot(obese_child, aes(x= time_obese)) + geom_line(stat = "count") + 
+  labs(x= "Age at diagnosis", y= "Obesity count", title= "Obesity diagnosis trend") +
+  theme_minimal()
+
+# categorize age
+pcos_dat1 <- mutate(pcos_dat1, child_age = case_when(time_obese<6~ "3-5", time_obese>=6 & time_obese<11~ "6-10", time_obese>=11~ "11-13"))
+age_obese <- pcos_dat1 %>% 
+  filter(obesity == 1)
+age_obese$child_age <- factor(age_obese$child_age, levels = c("3-5", "6-10", "11-13"),
+                              labels = c("3-5", "6-10", "11-13"))
+age_obese_percent <- age_obese %>%
+  group_by(PCOS, antenatal_ab, child_age) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+custom_colors <- c("No" = "#838B8B", "Yes" = "#CD8162")
+ggplot(age_obese_percent, aes(x = child_age, y = percentage, fill = PCOS)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ antenatal_ab) +
+  labs(y = "Obesity (%)", x = "Child Age (years)", fill = "PCOS") +
+  scale_fill_manual(values = custom_colors) +
+  scale_y_continuous(breaks = seq(0, 100, by = 20), limits = c(0, 100)) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+## add antibiotics
+combined_colors <- c("No.No" = "#838B8B",   # PCOS = No, Antibiotic = No
+                     "No.Yes" = "#6BAED6",  # PCOS = No, Antibiotic = Yes
+                     "Yes.No" = "#CD8162",  # PCOS = Yes, Antibiotic = No
+                     "Yes.Yes" = "red")     # PCOS = Yes, Antibiotic = Yes
+age_obese_percent$antenatal_ab <- factor(age_obese_percent$antenatal_ab,
+                                         levels = c("No", "Yes"),
+                                         labels = c("No antibiotics", "Antibiotics"))
+ggplot(age_obese_percent, aes(x = child_age, y = percentage, fill = interaction(PCOS, antenatal_ab))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(percentage, 1)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, 
+            size = 3.5) +
+  facet_wrap(~ antenatal_ab) +
+  labs(y = "Obesity (%)", x = "Child Age (years)", fill = "PCOS and Antenatal Antibiotics") +
+  scale_fill_manual(values = combined_colors) +
+  scale_y_continuous(breaks = seq(0, 100, by = 20), limits = c(0, 100)) +
+  theme_minimal() +
+  theme(legend.position = "right") + 
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 20),
+        axis.title.x = element_text(size = 14),
+        legend.text = element_text(size = 12))
+```
+
+
+
+## impute missing observations
+```{r}
+library(naniar)
+mcar_test(pcos_dat2)
+miss_var_summary(pcos_dat2)
+
+## pattern of missingness
+library(VIM)
+aggr(pcos_dat2, col = c('blue', 'tomato'), numbers = TRUE, sortVars = FALSE,
+     sortCombs = TRUE, combined = TRUE, only.miss = TRUE,
+     labels = names(pcos_dat2), cex.axis = 0.6, prop = FALSE,
+     ylab = "Pattern of missing data")
+
+pcos_dat2_factor <- pcos_dat2 %>%
+  mutate(across(everything(), as.factor))
+
+## multiple imputation
+library(mice)
+set.seed(123)
+imp_dat <- mice(pcos_dat2_factor, m= 10, maxit = 10, printFlag = FALSE, seed = 123)
+plot(imp_dat)
+```
+
+
+## analysis using all imputed datasets
+```{r}
+library(WeightIt)
+library(survey)
+# Step 1: Create an empty list to store the results
+results_list <- list()
+
+# Step 2: Iterate over each imputed dataset
+for (i in 1:10) {
+    # Extract the i-th imputed dataset
+    new_data_i <- mice::complete(imp_dat, action = i)
+    
+    new_data_i$obesity <- pcos_dat1$obesity
+    new_data_i$obesity <- as.factor(new_data_i$obesity)
+    
+    # Step 3: Estimate propensity scores
+    propensity_model_i <- glm(anyAbUse_mom ~ age_cat + BMI_cat + smok_snuf_px + parity_cat + DM + PCOS + metformin_use + GDM + CS + LGA + Gender + earlyAb_use, data = new_data_i, family = "binomial")
+    new_data_i$propensity_score <- predict(propensity_model_i, type = "response")
+    
+    # Step 4: Estimate stabilized weights
+    weight_obj <- weightit(anyAbUse_mom ~ age_cat + BMI_cat + smok_snuf_px + parity_cat + DM + PCOS + metformin_use + GDM + CS + LGA + Gender + earlyAb_use, data = new_data_i, family = "ps", propensity = new_data_i$propensity_score)
+    
+    
+    new_data_i$weights <- weight_obj$weights
+    
+    # Step 5: Create the weighted survey design object
+    weighted_survey_design_i <- svydesign(ids = ~1, weights = ~weights, data = new_data_i)
+    
+    # Step 6: Estimate ATE using IPW
+    ipw_effect_i <- svyglm(obesity ~ anyAbUse_mom, design = weighted_survey_design_i, family = quasibinomial)
+    
+    # Step 7: Store the results
+    results_list[[i]] <- ipw_effect_i
+}
+
+
+# Step 8: Combine the results using Rubin's rules
+library(mice)
+pooled_results <- pool(results_list)
+
+# Step 9: View the pooled estimates
+summary(weight_obj)
+summary(pooled_results)
+estimates <- exp(pooled_results$pooled$estimate[-1])
+se <- pooled_results$pooled$ubar[-1]
+
+lower_ci <- exp(log(estimates) - 1.96 * se)
+upper_ci <- exp(log(estimates) + 1.96 * se)
+cbind(estimates, lower_ci, upper_ci)
+```
+
+
+## standardized mean differences (SMD) for covariates before and after weighting--imputed data
+```{r}
+library(tableone)
+library(ggplot2)
+
+# Define covariates
+covariates <- c("age_cat", "BMI_cat", "smok_snuf_px", "parity_cat", "DM", "PCOS", "metformin_use", "GDM", "CS", "LGA", "Bwt_cat", "Gender", "earlyAb_use")
+covariate_names <- c("Age", "BMI", "Smoking/snuff", "Parity", "DM", "PCOS", "Metformin", "GDM", "CS", "LGA", "Birthweight", "Gender", "Early-life Ab")
+smd_data <- data.frame(covariate = covariate_names, unweighted_smd = numeric(length(covariates)), weighted_smd = numeric(length(covariates)))
+
+# Loop over each imputed dataset
+for (i in 1:10) {
+    # Create unweighted table
+    unweighted_table <- CreateTableOne(vars = covariates, strata = "anyAbUse_mom", data = mice::complete(imp_dat, action = i), test = FALSE, smd = TRUE)
+    
+    # Create weighted table
+    weighted_table <- svyCreateTableOne(vars = covariates, strata = "anyAbUse_mom", data = svydesign(ids = ~1, weights = ~weight_obj$weights, data = mice::complete(imp_dat, action = i)), test = FALSE, smd = TRUE)
+    
+    # Extract SMDs
+    unweighted_smd <- ExtractSmd(unweighted_table, varLabels = FALSE)
+    weighted_smd <- ExtractSmd(weighted_table, varLabels = FALSE)
+    
+    # Update smd_data dataframe
+    smd_data$unweighted_smd <- smd_data$unweighted_smd + unweighted_smd / 10  # Weighted average of SMDs across imputed datasets
+    smd_data$weighted_smd <- smd_data$weighted_smd + weighted_smd / 10  # Weighted average of SMDs across imputed datasets
+}
+
+# Create plot
+ggplot(smd_data, aes(x = unweighted_smd, y = reorder(covariate, unweighted_smd), color = "Sample")) + 
+  geom_point() + 
+  geom_point(aes(x = weighted_smd, color = "Weighted SMD")) +
+  geom_vline(xintercept = 0.1, linetype = "dashed") +
+  labs(x = "Standardized mean differences", y = "", color = "Sample") +
+  scale_color_manual(values = c("Sample" = "red", "Weighted SMD" = "blue"), 
+                     labels = c("Unweighted", "Weighted")) +
+  theme_minimal() +
+  ggtitle("Covariate balance before and after weighting")
+
+```
+
+
+## Crosstabulations of covariates with outcome
+```{r}
+library(gmodels)
+
+variables <- c("age_cat", "BMI_cat", "BMI_cat_new", "smok_snuf_px", "parity_cat", "DM", "PCOS", "metformin_use", "GDM", "hypoth_rec", "GA_cat", "CS", "size_GA", "Bwt_cat", "Gender", "earlyAb_use", "antenatal_ab", "preconception", "firstTm", "secondTm", "thirdTm", "penicillin", "betalctm", "aminoglycoside", "macrolides", "ttc", "sulfT", "quinolone", "nitro", "gynecol",  "others", "mom_presc_cat")
+
+# obesity vs covariates 
+for (variable in variables) {
+  cat("contingency table for variable:", variable, "\n")
+    CrossTable(pcos_dat_missind[[variable]], pcos_dat_missind$obesity, prop.c = F, prop.t = F, prop.chisq = F)
+}
+
+variables <- c("age_cat", "BMI_cat", "smok_snuf_px", "parity_cat", "DM", "PCOS", "metformin_use", "GDM", "hypoth_rec", "GA_cat", "CS", "SGA", "LGA", "Bwt_cat", "Gender", "earlyAb_use")
+
+# antenatal antibiotics vs covariates
+for (variable in variables) {
+  cat("contingency table for variable:", variable, "\n")
+    CrossTable(pcos_dat_missind[[variable]], pcos_dat_missind$antenatal_ab, prop.c = F, prop.t = F, prop.chisq = F)
+}
+```
+
+
+
+## Main model using GEE (causal effect of antenatal antibiotics on childhood obesity)
+```{r}
+library(WeightIt)
+library(cobalt)
+library(geepack)
+
+pcos_dat1 <- pcos_dat1 %>%
+  mutate(BMI_cat_new = case_when(
+    BMI_cat %in% c("Normal", "Underweight") ~ "Normal_Underweight",
+    TRUE ~ BMI_cat
+  ))  # combine normal & underweight
+
+
+pcos_dat_missind <- pcos_dat1 %>% 
+  dplyr::select(mlopnr, setid, age_cat, BMI_cat, BMI_cat_new, smok_snuf_px, parity_cat, DM, PCOS, metformin_use, GDM, hypoth_rec, GA_cat, CS, size_GA, Bwt_cat, Gender, earlyAb_use, calendar_year, antenatal_ab, preconception, firstTm, secondTm, thirdTm, penicillin, betalctm, aminoglycoside, macrolides, ttc, sulfT, quinolone, nitro, gynecol, others, mom_presc_cat, obesity, child_age)  
+
+
+# Recode missing values to 'Missing'
+pcos_dat_missind[is.na(pcos_dat_missind)] <- 'Missing'
+
+# Create missing indicator variables
+missing_indicators <- sapply(pcos_dat_missind, function(x) as.numeric(x == 'Missing'))
+
+# Drop missing categories with few/no observations in one cell
+pcos_dat_clean <- pcos_dat_missind[
+    pcos_dat_missind$parity_cat != "Missing" & 
+      pcos_dat_missind$size_GA != "Missing" &
+    pcos_dat_missind$CS != "Missing", 
+]
+
+pcos_dat_clean$antenatal_ab <- ifelse(pcos_dat_clean$antenatal_ab == "Yes", 1,0)
+
+pss_model_glm <- glm(antenatal_ab ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind <- predict(pss_model_glm, type = "response")
+pcos_dat_clean$pss <- pss_missind
+
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind))
+weights_missind[pcos_dat_clean$antenatal_ab == 1] <- 1 / pss_missind[pcos_dat_clean$antenatal_ab == 1]
+weights_missind[pcos_dat_clean$antenatal_ab == 0] <- 1 / (1 - pss_missind[pcos_dat_clean$antenatal_ab == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw <- ifelse(pcos_dat_clean$antenatal_ab == "1",
+                                      (mean(pcos_dat_clean$pss))/pcos_dat_clean$pss,
+                                      mean(1-pcos_dat_clean$pss)/(1-pcos_dat_clean$pss))
+summary(pcos_dat_clean$stab.ipw)
+
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw >=p1 & stab.ipw <=p99)
+
+pcos_dat_clean$antenatal_ab <- as.factor(pcos_dat_clean$antenatal_ab)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw, data = orderd_pcos_dat, std.err = "san.se")
+model_gee_stab <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, data = orderd_pcos_dat, std.err = "san.se")
+model_gee_trm <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, data = orderd_pcos_dat)
+
+
+# Summary of IPW effect
+summary(model_gee_stab)$coefficients
+broom::tidy(model_gee, conf.int = T, exponentiate = T)
+
+## check the model with weighted LR
+weighted_glm_model <- glm(obesity ~ antenatal_ab, data = pcos_dat_clean, family = "binomial", weights = stab.ipw)
+
+```
+
+
+## Distributional plots for propensity scores (PS) and inverse probability weights (IPWs)
+```{r}
+library(cobalt)
+library(WeightIt)
+
+hist(pcos_dat_clean$stab.ipw, breaks = "sturges", col = "lightgray", main = "Distribution of weights", xlab = "Inverse probability weights")
+pcos_dat_long <- pcos_dat_clean %>%
+  pivot_longer(cols = c(ipw, stab.ipw), names_to = "variable", values_to = "value")
+pcos_dat_long$variable <- factor(pcos_dat_long$variable, levels = c("ipw", "stab.ipw"),
+                                 labels = c("Unstabilized", "Stabilized"))
+plot1 <- ggplot(pcos_dat_long, aes(x = variable, y = value, fill = variable)) +
+  geom_boxplot(stat= "boxplot", position= "dodge2", outlier.shape = 19, outlier.alpha = 2, outlier.size = 2.5, notchwidth = 0.5) +  # Increased width of box plots
+  labs(title = "Distribution of IPWs",
+       x = "",
+       y = "Values") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10), limits = c(0, max(pcos_dat_long$value) * 1.1)) +  # Adjusted y-axis limits
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 14, face = "bold"),
+    axis.text.y = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    aspect.ratio = 0.8  # Adjusted aspect ratio
+  )
+plot2 <- ggplot(pcos_dat_trimmed, aes(x = factor(0), y = stab.ipw)) +
+  geom_boxplot(width=1, fill = "#2ca02c") +
+  labs(title = "",
+       x = "Trimmed",
+       y = "Values") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+library(patchwork)
+print(plot1)
+combined_plot <- plot1 + plot2 + plot_layout(ncol = 1)
+print(combined_plot)
+# change labels
+pcos_dat_missind$Treatment <- factor(pcos_dat_missind$antenatal_ab, 
+                                     levels = c("No", "Yes"), 
+                                     labels = c("No Antibiotics", "Antibiotics"))
+# weight sample
+ps_weight <- weightit(antenatal_ab ~ age_cat + BMI_cat + smok_snuf_px + parity_cat + DM + PCOS + GDM + size_GA + CS + Gender + preconception, data = pcos_dat_missind, method = "ps", estimand = "ATE")
+
+# balance tab
+bal.tab(ps_weight, un = TRUE,
+        thresholds = c(m = .1))
+
+summary(ps_weight)
+
+# balance plots
+## new names for variables
+new_names <- c(preconception_Yes= "Preconception antibiotics (Y/N)",
+               PCOS_Yes = "PCOS (Y/N)",
+               parity_cat_primipara = "Parity: Primipara",
+               parity_cat_multipara = "Parity: Multipara",
+               BMI_cat_Obese = "BMI (kg/m^2): >=30",
+               DM_Yes = "Diabetes Mellitus (Y/N)",
+               BMI_cat_Normal = "BMI (kg/m^2): 18.5-24.9",
+               smok_snuf_px_Yes = "Smoking/snuff (Y/N)",
+               `age_cat_<25` = "Age at delivery (years): <25",
+               CS_Yes = "Cesarean delivery: Yes",
+               CS_No = "Cesarean delivery: No",
+               GDM_Yes = "Gestational diabestes (Y/N)",
+               metformin_use_Yes = "Metformin (Y/N)",
+               `age_cat_30-34` = "Age at delivery (years): 30-34",
+               `age_cat_25-29` = "Age at delivery (years): 25-29",
+               `age_cat_>=35` = "Age at delivery (years): >=35",
+               BMI_cat_Overweight = "BMI (kg/m^2): 25-29.9",
+               BMI_cat_Missing = "BMI: Missing",
+               Bwt_cat_Normal = "Birthweight (grams): 2500-4000",
+               Bwt_cat_LBW = "Birthweight (grams): <2500",
+               Gender_Male = "Child sex (M/F)",
+               Bwt_cat_Macrosomia = "Birthweight (grams): >4000",
+               parity_cat_Missing = "Parity: Missing",
+               BMI_cat_Underweight = "BMI (kg/m^2): <18.5",
+               CS_Missing = "Cesarean delivery: Missing",
+               size_GA_LGA = "Size for gestational age: LGA",
+               size_GA_AGA = "Size for gestational age: AGA",
+               size_GA_Missing = "Size for gestational age: Missing",
+               size_GA_SGA = "Size for gestational age: SGA")
+
+
+
+
+
+love.plot(ps_weight, binary = "std",
+          thresholds = c(m = .1),
+          abs = TRUE,
+          line = TRUE,
+          drop.distance = TRUE,
+          var.order = "unadjusted",
+          var.names = new_names,
+          alpha = 1,
+          size = 3,
+          colors = c("tomato", "blue"),
+          shapes = c("triangle filled","circle filled"),
+          sample.names = c("Unweighted", "PS Weighted"),
+          limits = c(0, .50),
+          position = c(.85, .25)) +
+  theme(legend.box.background = element_rect(), 
+        legend.box.margin = margin(0.5, 0.5, 0.5, 0.5))
+          
+
+bal.plot(ps_weight, which = "both",
+         thresholds = c(m = .1)) + labs (title = "", x= "Propensity score") 
+
+```
+
+## Stratify the main model by PCOS status and child gender
+```{r}
+# Fit for PCOS status separetely 
+model_gee_PCOS <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, std.err = "san.se", data = subset(orderd_pcos_dat, PCOS == "Yes"))
+broom::tidy(model_gee_PCOS, conf.int = T, exponentiate = T)
+
+model_gee_NoPCOS <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, std.err = "san.se", data = subset(orderd_pcos_dat, PCOS == "No"))
+broom::tidy(model_gee_NoPCOS, conf.int = T, exponentiate = T)
+
+# Fit separate GEE models for each gender
+model_gee_female <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, std.err = "san.se", data = subset(orderd_pcos_dat, Gender == "Female"))
+broom::tidy(model_gee_female, conf.int = T, exponentiate = T)
+
+
+model_gee_male <- geeglm(obesity ~ antenatal_ab, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw, std.err = "san.se", data = subset(orderd_pcos_dat, Gender == "Male"))
+broom::tidy(model_gee_male, conf.int = T, exponentiate = T)
+```
+
+
+## GEE models by periods of exposure
+```{r}
+# First Trimester
+pcos_dat_clean$firstTm <- ifelse(pcos_dat_clean$firstTm == "Yes", 1,0)
+
+pss_model_glm_FT <- glm(firstTm ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_FT <- predict(pss_model_glm_FT, type = "response")
+pcos_dat_clean$pss_FT <- pss_missind_FT
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind_FT))
+weights_missind[pcos_dat_clean$firstTm == 1] <- 1 / pss_missind_FT[pcos_dat_clean$firstTm == 1]
+weights_missind[pcos_dat_clean$firstTm == 0] <- 1 / (1 - pss_missind_FT[pcos_dat_clean$firstTm == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_FT <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_ft <- ifelse(pcos_dat_clean$firstTm == "1",
+                                      (mean(pcos_dat_clean$pss_FT))/pcos_dat_clean$pss_FT,
+                                      mean(1-pcos_dat_clean$pss_FT)/(1-pcos_dat_clean$pss_FT))
+summary(pcos_dat_clean$stab.ipw_ft)
+
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_ft, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_ft, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_ft >=p1 & stab.ipw_ft <=p99)
+
+pcos_dat_clean$firstTm <- as.factor(pcos_dat_clean$firstTm)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee2 <- geeglm(obesity ~ firstTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_FT, data = orderd_pcos_dat, std.err = "san.se")
+model_gee2stab <- geeglm(obesity ~ firstTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_ft, data = orderd_pcos_dat, std.err = "san.se")
+model_gee2trm <- geeglm(obesity ~ firstTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_ft, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_geeFT)
+broom::tidy(model_gee2, conf.int = T, exponentiate = T)
+## check the model with weighted LR
+weighted_glm_modelFT <- glm(obesity ~ firstTm, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_ft)
+
+
+
+
+
+# Second Trimester
+pcos_dat_clean$secondTm <- ifelse(pcos_dat_clean$secondTm == "Yes", 1,0)
+
+pss_model_glm_ST <- glm(secondTm ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_ST <- predict(pss_model_glm_ST, type = "response")
+pcos_dat_clean$pss_ST <- pss_missind_ST
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind_ST))
+weights_missind[pcos_dat_clean$secondTm == 1] <- 1 / pss_missind_ST[pcos_dat_clean$secondTm == 1]
+weights_missind[pcos_dat_clean$secondTm == 0] <- 1 / (1 - pss_missind_ST[pcos_dat_clean$secondTm == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_ST <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_st <- ifelse(pcos_dat_clean$secondTm == "1",
+                                      (mean(pcos_dat_clean$pss_ST))/pcos_dat_clean$pss_ST,
+                                      mean(1-pcos_dat_clean$pss_ST)/(1-pcos_dat_clean$pss_ST))
+
+summary(pcos_dat_clean$stab.ipw_st)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_st, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_st, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_st >=p1 & stab.ipw_st <=p99)
+
+pcos_dat_clean$secondTm <- as.factor(pcos_dat_clean$secondTm)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee3 <- geeglm(obesity ~ secondTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_ST, data = orderd_pcos_dat, std.err = "san.se")
+model_gee3stab <- geeglm(obesity ~ secondTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_st, data = orderd_pcos_dat, std.err = "san.se")
+model_gee3trm <- geeglm(obesity ~ secondTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_st, data = orderd_pcos_dat, std.err = "san.se")
+
+# Summary of IPW effect
+summary(model_gee3)
+broom::tidy(model_gee3, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelST <- glm(obesity ~ secondTm, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_st)
+
+
+
+
+
+# Third Trimester
+pcos_dat_clean$thirdTm <- ifelse(pcos_dat_clean$thirdTm == "Yes", 1,0)
+
+pss_model_glm_TT <- glm(thirdTm ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_TT <- predict(pss_model_glm_TT, type = "response")
+pcos_dat_clean$pss_TT <- pss_missind_TT
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind_TT))
+weights_missind[pcos_dat_clean$thirdTm == 1] <- 1 / pss_missind_TT[pcos_dat_clean$thirdTm == 1]
+weights_missind[pcos_dat_clean$thirdTm == 0] <- 1 / (1 - pss_missind_TT[pcos_dat_clean$thirdTm == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_TT <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_tt <- ifelse(pcos_dat_clean$thirdTm == "1",
+                                      (mean(pcos_dat_clean$pss_TT))/pcos_dat_clean$pss_TT,
+                                      mean(1-pcos_dat_clean$pss_TT)/(1-pcos_dat_clean$pss_TT))
+
+summary(pcos_dat_clean$stab.ipw_tt)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_tt, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_tt, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_tt >=p1 & stab.ipw_tt <=p99)
+
+pcos_dat_clean$thirdTm <- as.factor(pcos_dat_clean$thirdTm)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee4 <- geeglm(obesity ~ thirdTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_TT, data = orderd_pcos_dat, std.err = "san.se")
+model_gee4stab <- geeglm(obesity ~ thirdTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_tt, data = orderd_pcos_dat, std.err = "san.se")
+model_gee4trm <- geeglm(obesity ~ thirdTm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_tt, data = orderd_pcos_dat, std.err = "san.se")
+
+# Summary of IPW effect
+summary(model_gee4)
+broom::tidy(model_gee4, conf.int = T, exponentiate = T)
+
+# weighted LR 
+weighted_glm_modelTT <- glm(obesity ~ thirdTm, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_tt)
+
+```
+
+
+## GEE model by number of prescriptions
+```{r}
+library(nnet)
+library(geepack)
+
+pss_model_glm_presc <- multinom(mom_presc_cat ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_presc <- predict(pss_model_glm_presc, type = "probs")
+pcos_dat_clean$pss_presc <- pss_missind_presc
+
+# Calculate IPW weights
+pcos_dat_clean$ipw_presc <- with(pcos_dat_clean, ifelse(mom_presc_cat == "0", 1/(1 - pss_model_glm_presc$fitted.values[, "0"]),
+                                                             ifelse(mom_presc_cat == "1", 1 / pss_model_glm_presc$fitted.values [, "1"],
+                                                                    ifelse(mom_presc_cat == "2", 1 / pss_model_glm_presc$fitted.values[, "2"],
+                                                                                                                                                   1 / pss_model_glm_presc$fitted.values[, "3"]))))
+# Check if weights_missind contains non-empty values
+summary(pcos_dat_clean$ipw_presc)
+
+# stabilize weights
+pcos_dat_clean$stab_ipw_presc <- ifelse(pcos_dat_clean$mom_presc_cat == "1",
+                                        mean(pcos_dat_clean$pss_presc[, "1"]) / pcos_dat_clean$pss_presc[, "1"],
+                                        ifelse(pcos_dat_clean$mom_presc_cat == "2",
+                                               mean(pcos_dat_clean$pss_presc[, "2"]) / pcos_dat_clean$pss_presc[, "2"],
+                                               ifelse(pcos_dat_clean$mom_presc_cat == "3",
+                                                      mean(pcos_dat_clean$pss_presc[, "3"]) / pcos_dat_clean$pss_presc[, "3"],
+                                                      mean(1 - pcos_dat_clean$pss_presc) / (1 - pcos_dat_clean$pss_presc)
+                                               )
+                                        )
+)
+
+summary(pcos_dat_clean$stab_ipw_presc)
+
+# Trim extreme weights
+p1 <- quantile(pcos_dat_clean$stab_ipw_presc, 0.01)
+p99 <- quantile(pcos_dat_clean$stab_ipw_presc, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab_ipw_presc >=p1 & stab_ipw_presc <=p99)
+
+pcos_dat_clean$mom_presc_cat <- as.factor(pcos_dat_clean$mom_presc_cat)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee5 <- geeglm(obesity ~ factor(mom_presc_cat), family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_presc, data = orderd_pcos_dat, std.err = "san.se")
+model_gee5stab <- geeglm(obesity ~ factor(mom_presc_cat), family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab_ipw_presc, data = orderd_pcos_dat, std.err = "san.se")
+model_gee5trm <- geeglm(obesity ~ factor(mom_presc_cat), family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab_ipw_presc, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee5stab)
+broom::tidy(model_gee5stab, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelPresc <- glm(obesity ~ factor(mom_presc_cat), data = pcos_dat_clean, family = "binomial", weights = stab_ipw_presc)
+
+
+```
+
+
+## GEE models by antibiotic classes
+```{r}
+# Penicillin
+pcos_dat_clean$penicillin <- ifelse(pcos_dat_clean$penicillin == "Yes", 1,0)
+
+pss_model_glm_pen <- glm(penicillin ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_pen <- predict(pss_model_glm_pen, type = "response")
+pcos_dat_clean$pss_pen <- pss_missind_pen
+
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind))
+weights_missind[pcos_dat_clean$penicillin == 1] <- 1 / pss_missind_pen[pcos_dat_clean$penicillin == 1]
+weights_missind[pcos_dat_clean$penicillin == 0] <- 1 / (1 - pss_missind_pen[pcos_dat_clean$penicillin == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_pen <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_pen <- ifelse(pcos_dat_clean$penicillin == "1",
+                                      (mean(pcos_dat_clean$pss_pen))/pcos_dat_clean$pss_pen,
+                                      mean(1-pcos_dat_clean$pss_pen)/(1-pcos_dat_clean$pss_pen))
+
+summary(pcos_dat_clean$stab.ipw_pen)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_pen, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_pen, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_pen >=p1 & stab.ipw_pen <=p99)
+
+pcos_dat_clean$penicillin <- as.factor(pcos_dat_clean$penicillin)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee6 <- geeglm(obesity ~ penicillin, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_pen, data = orderd_pcos_dat, std.err = "san.se")
+model_gee6stab <- geeglm(obesity ~ penicillin, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_pen, data = orderd_pcos_dat, std.err = "san.se")
+model_gee6trm <- geeglm(obesity ~ penicillin, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_pen, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee6)
+broom::tidy(model_gee6, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelPenc <- glm(obesity ~ penicillin, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_pen)
+
+
+
+
+
+
+# Non-penicillin beta-lactams
+pcos_dat_clean$betalctm <- ifelse(pcos_dat_clean$betalctm == "Yes", 1,0)
+
+pss_model_glm_beta <- glm(betalctm ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_beta <- predict(pss_model_glm_beta, type = "response")
+pcos_dat_clean$pss_beta <- pss_missind_beta
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind_beta))
+weights_missind[pcos_dat_clean$betalctm == 1] <- 1 / pss_missind_beta[pcos_dat_clean$betalctm == 1]
+weights_missind[pcos_dat_clean$betalctm == 0] <- 1 / (1 - pss_missind_beta[pcos_dat_clean$betalctm == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_beta <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_beta <- ifelse(pcos_dat_clean$betalctm == "1",
+                                      (mean(pcos_dat_clean$pss_beta))/pcos_dat_clean$pss_beta,
+                                      mean(1-pcos_dat_clean$pss_beta)/(1-pcos_dat_clean$pss_beta))
+
+summary(pcos_dat_clean$stab.ipw_beta)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_beta, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_beta, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_beta >=p1 & stab.ipw_beta <=p99)
+
+pcos_dat_clean$betalctm <- as.factor(pcos_dat_clean$betalctm)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee7 <- geeglm(obesity ~ betalctm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_beta, data = orderd_pcos_dat, std.err = "san.se")
+model_gee7stab <- geeglm(obesity ~ betalctm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_beta, data = orderd_pcos_dat, std.err = "san.se")
+model_gee7trm <- geeglm(obesity ~ betalctm, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_beta, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee7)
+broom::tidy(model_gee7, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelBeta <- glm(obesity ~ betalctm, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_beta)
+
+
+
+
+
+# Macrolides
+pcos_dat_clean$macrolides <- ifelse(pcos_dat_clean$macrolides == "Yes", 1,0)
+
+pss_model_glm_mac <- glm(macrolides ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_mac <- predict(pss_model_glm_mac, type = "response")
+pcos_dat_clean$pss_mac <- pss_missind_mac
+
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind_mac))
+weights_missind[pcos_dat_clean$macrolides == 1] <- 1 / pss_missind_mac[pcos_dat_clean$macrolides == 1]
+weights_missind[pcos_dat_clean$macrolides == 0] <- 1 / (1 - pss_missind_mac[pcos_dat_clean$macrolides == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_mac <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_mac <- ifelse(pcos_dat_clean$macrolides == "1",
+                                      (mean(pcos_dat_clean$pss_mac))/pcos_dat_clean$pss_mac,
+                                      mean(1-pcos_dat_clean$pss_mac)/(1-pcos_dat_clean$pss_mac))
+
+summary(pcos_dat_clean$stab.ipw_mac)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_mac, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_mac, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_mac >=p1 & stab.ipw_mac <=p99)
+
+pcos_dat_clean$macrolides <- as.factor(pcos_dat_clean$macrolides)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee8 <- geeglm(obesity ~ macrolides, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_mac, data = orderd_pcos_dat, std.err = "san.se")
+model_gee8stab <- geeglm(obesity ~ macrolides, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_mac, data = orderd_pcos_dat, std.err = "san.se")
+model_gee8trm <- geeglm(obesity ~ macrolides, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_mac, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee8)
+broom::tidy(model_gee8, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelMac <- glm(obesity ~ macrolides, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_mac)
+
+
+
+
+
+# Other antibiotics
+pcos_dat_clean$others <- ifelse(pcos_dat_clean$others == "Yes", 1,0)
+
+pss_model_glm_other <- glm(others ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_other <- predict(pss_model_glm_other, type = "response")
+pcos_dat_clean$pss_other <- pss_missind_other
+
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind))
+weights_missind[pcos_dat_clean$others == 1] <- 1 / pss_missind_other[pcos_dat_clean$others == 1]
+weights_missind[pcos_dat_clean$others == 0] <- 1 / (1 - pss_missind_other[pcos_dat_clean$others == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_other <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_other <- ifelse(pcos_dat_clean$others == "1",
+                                      (mean(pcos_dat_clean$pss_other))/pcos_dat_clean$pss_other,
+                                      mean(1-pcos_dat_clean$pss_other)/(1-pcos_dat_clean$pss_other))
+
+summary(pcos_dat_clean$stab.ipw_other)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_other, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_other, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_other >=p1 & stab.ipw_other <=p99)
+
+pcos_dat_clean$others <- as.factor(pcos_dat_clean$others)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee9 <- geeglm(obesity ~ others, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_other, data = orderd_pcos_dat, std.err = "san.se")
+model_gee9stab <- geeglm(obesity ~ others, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_other, data = orderd_pcos_dat, std.err = "san.se")
+model_gee9trm <- geeglm(obesity ~ others, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_other, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee9)
+broom::tidy(model_gee9trm, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelOther <- glm(obesity ~ others, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_other)
+
+
+
+
+
+
+# Gynaecologic abs
+pcos_dat_clean$gynecol <- ifelse(pcos_dat_clean$gynecol == "Yes", 1,0)
+
+pss_model_glm_gyn <- glm(gynecol ~ age_cat + BMI_cat_new + smok_snuf_px + parity_cat + DM + PCOS + GDM + CS + Gender + preconception, data = pcos_dat_clean, family = "binomial")
+
+# Extract propensity scores
+pss_missind_gyn <- predict(pss_model_glm_gyn, type = "response")
+pcos_dat_clean$pss_gyn <- pss_missind_gyn
+
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind))
+weights_missind[pcos_dat_clean$gynecol == 1] <- 1 / pss_missind_gyn[pcos_dat_clean$gynecol == 1]
+weights_missind[pcos_dat_clean$gynecol == 0] <- 1 / (1 - pss_missind_gyn[pcos_dat_clean$gynecol == 0])
+
+# Check if weights_missind contains non-empty values
+summary(weights_missind)
+pcos_dat_clean$ipw_gyn <- weights_missind
+
+# stabilize weights
+pcos_dat_clean$stab.ipw_gyn <- ifelse(pcos_dat_clean$gynecol == "1",
+                                      mean(pcos_dat_clean$pss_gyn)/pcos_dat_clean$pss_gyn,
+                                      mean(1-pcos_dat_clean$pss_gyn)/(1-pcos_dat_clean$pss_gyn))
+
+summary(pcos_dat_clean$stab.ipw_gyn)
+## Trim weights
+p1 <- quantile(pcos_dat_clean$stab.ipw_gyn, 0.01)
+p99 <- quantile(pcos_dat_clean$stab.ipw_gyn, 0.99)
+
+pcos_dat_trimmed <- pcos_dat_clean %>% 
+  filter(stab.ipw_gyn >=p1 & stab.ipw_gyn <=p99)
+
+pcos_dat_clean$macrolides <- as.factor(pcos_dat_clean$macrolides)
+
+#  Fit outcome model using IPW
+## order the cluster variable
+ordering <- order(pcos_dat_trimmed$mlopnr)
+orderd_pcos_dat <- pcos_dat_trimmed[ordering,]
+
+model_gee10 <- geeglm(obesity ~ gynecol, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = ipw_gyn, data = orderd_pcos_dat, std.err = "san.se")
+model_gee10stab <- geeglm(obesity ~ gynecol, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_gyn, data = orderd_pcos_dat)
+model_gee10trm <- geeglm(obesity ~ gynecol, family = binomial(), corstr = "exchangeable", id = mlopnr, weights = stab.ipw_gyn, data = orderd_pcos_dat, std.err = "san.se")
+
+
+# Summary of IPW effect
+summary(model_gee8)
+broom::tidy(model_gee10, conf.int = T, exponentiate = T)
+# weighted LR 
+weighted_glm_modelGyn <- glm(obesity ~ gynecol, data = pcos_dat_clean, family = "binomial", weights = stab.ipw_gyn)
+
+
+```
+
+
+## Forest plots
+```{r}
+library(sjPlot)
+
+# antenatal antibiotics
+plot_model(model_gee_stab, axis.labels = "Antenatal antibiotics")
+
+axis_labels <- c("First TM", "Second TM", "Third TM")
+# period of exposure
+fplot1 <- plot_models(model_gee_stab, model_gee2stab, model_gee3stab, model_gee4stab, axis.labels = c("Third TM", "Second TM", "First TM", "Any antibiotics"), show.legend = F, p.shape = T, dot.size = 3, line.size = 1,  vline.color = "gray", show.values = T, grid.breaks = c(0.5, 1, 2)
+            )
+fplot1 + theme(axis.text.x = element_text(size = 16),  
+             axis.text.y = element_text(size = 16),  
+             axis.title.x = element_text(size = 14),
+             axis.title.y = element_text(size = 14))
+
+# class
+fplot2 <- plot_models(model_gee6stab, model_gee7stab, model_gee8stab, model_gee10stab, model_gee9stab, axis.labels = c("Other Ab", "Gynaecologic Ab", "Macrolides", "Beta-lactams", "Penicillins"), show.legend = F, p.shape = T, show.values = T, dot.size = 3, line.size = 1,  vline.color = "gray", grid.breaks = c(0.5, 1, 2, 3)
+            )
+fplot2 + theme(axis.text.x = element_text(size = 16),  
+             axis.text.y = element_text(size = 16),  
+             axis.title.x = element_text(size = 14),
+             axis.title.y = element_text(size = 14))
+
+## period+class+count
+fplot2 <- plot_models(model_gee_stab, model_gee2stab, model_gee3stab, model_gee4stab, model_gee6stab, model_gee7stab, model_gee8stab, model_gee10stab, model_gee9stab, model_gee5stab, axis.labels = c("≥3", "2", "1", "Other Ab", "Gynaecologic Ab", "Macrolides", "Beta-lactams", "Penicillins", "Third TM", "Second TM", "First TM", "Any antibiotics"), show.legend = F, p.shape = T, show.values = F, show.p = F, dot.size = 4, line.size = 1.5, title = "Causal effect of antenatal antibiotics", colors = c("red", "#CD661D", "#CD661D", "darkblue", "darkgreen", "blue", "brown", "tomato", "brown", "red"),  vline.color = "gray", grid.breaks = c(0.5, 1, 2, 3)
+)
+fplot2 + theme(axis.text.x = element_text(size = 20),  
+               axis.text.y = element_text(size = 20),  
+               axis.title.x = element_text(size = 16),
+               axis.title.y = element_text(size = 20),
+               plot.title = element_text(size = 20, face = "bold"))
+
+# dose-response
+
+## extract estimates
+model_gee_tidy <- tidy(model_gee5stab, conf.int = TRUE, exponentiate = TRUE)
+dose_response_df <- model_gee_tidy %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    term = recode(term, 
+                  `factor(mom_presc_cat)1` = "1", 
+                  `factor(mom_presc_cat)2` = "2", 
+                  `factor(mom_presc_cat)3` = "≥3")
+  )
+
+## Add a row for the reference category (0 prescriptions)
+reference_row <- data.frame(
+  term = "0",
+  estimate = 1,
+  conf.low = 1,
+  conf.high = 1
+)
+## Combine the reference row with the dose-response data
+dose_response_df <- bind_rows(reference_row, dose_response_df) %>%
+  arrange(match(term, c("0", "1", "2","≥3"))) 
+dose_response_df$term <- factor(dose_response_df$term, levels = c("0", "1", "2","≥3"))
+## Plot the dose-response curve
+fplot3 <- ggplot(dose_response_df, aes(x = term, y = estimate)) +
+  geom_point(size = 4, color = "red") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, color= "red") +
+  geom_line(aes(group = 1), linetype = "solid") +
+  scale_y_continuous(trans = 'log10', breaks = c(0.5, 1, 2, 3), limits = c(0.5, 5)) +
+  labs(title = "",
+       x = "Number of Prescriptions",
+       y = "Odds Ratio (95% CI)",
+       caption = "") +
+  theme_minimal()
+fplot3 + theme(axis.text.x = element_text(size = 16),  
+             axis.text.y = element_text(size = 16),  
+             axis.title.x = element_text(size = 16),
+             axis.title.y = element_text(size = 16))
+
+
+# PCOS
+custom_colors <- c("#56B4E9", "tomato")
+fplot4 <- plot_model(PCOS_model, show.values = T, ci_method = "wald", axis.labels = c("Early-life Ab", "Antenatal Ab", "Preconception Ab", "Male sex", "Cesarean delivery", "SGA", "LGA", "Gestational diabetes", "Metformin", "Diabetes", "Tobacco use", "Primipara", "BMI: Overweight", "BMI: Obese", "BMI: Normal/underweight", "Maternal age: 30-34", "Maternal age: 25-29", "Maternal age: >=35", "PCOS"), spacing = 0.3, dot.size = 1, value.offset = .4, value.size =3.5, p.shape = F,colors = "blue",  vline.color = "blue", grid.breaks = c(0.1, 0.5, 1, 2, 3, 5)
+           )
+fplot4 + theme(axis.text.x = element_text(size = 14),  
+             axis.text.y = element_text(size = 14),  
+             axis.title.x = element_text(size = 14),
+             axis.title.y = element_text(size = 14))
+```
+
+
+
+## Summary of ps and weights of model with missing indicator
+```{r}
+summary(pcos_dat_missind$pss)
+tapply(pcos_dat_missind$pss, pcos_dat_missind$anyAbUse_mom, summary)
+
+summary(pcos_dat_missind$ipw)
+```
+
+## PAF
+```{r}
+# Extract coefficients from the IPW-weighted GEE model
+coef_ipw <- coef(PCOS_model)
+
+# Calculate adjusted odds ratio for the exposure variable
+AOR <- exp(coef_ipw["BMI_cat_newOverweight"])
+
+# Calculate prevalence of exposure
+prevalence_exposure <- mean(pcos_dat_missind$gynecol[pcos_dat_missind$obesity == 1] == "Yes")
+
+# Calculate PAF
+PAF <- prevalence_exposure * (1- (1 / AOR))
+
+# Print PAF
+round(PAF, digits = 3)
+
+# PF = Prevalence_exposure * (1-OR)
+
+# Another method
+library(graphPAF)
+
+PAF_calc_discrete(weighted_glm_model, "antenatal_ab", refval = 0, data = pcos_dat_clean, calculation_method = "D", ci=FALSE)
+```
+
+
+### plot ps
+```{r}
+library(ggplot2)
+
+# Create data frames for each group
+data_no_antibiotics <- data.frame(pss = pcos_dat_missind$pss[pcos_dat_missind$anyAbUse_mom == 0])
+data_antibiotics <- data.frame(pss = pcos_dat_missind$pss[pcos_dat_missind$anyAbUse_mom == 1])
+
+# Create density plots using ggplot2
+ggplot() +
+  geom_density(data = data_no_antibiotics, aes(x = pss, color = "No Antibiotics"), alpha = 0.5) +
+  geom_density(data = data_antibiotics, aes(x = pss, color = "Antibiotics"), linetype = "dashed", alpha = 0.5) +
+  scale_color_manual(values = c("No Antibiotics" = "blue", "Antibiotics" = "red"),
+                     labels = c("No Antibiotics", "Antibiotics")) +  # Change legend labels
+  labs(title = "Density Plot of propensity scores by Antibiotics", x = "Propensity scores", y = "Density") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.border = element_rect(color = "black", fill = NA),  # Set border color
+        axis.line = element_line(color = "black"))  # Set axis line color
+
+```
+
+
+## Balance check for covariates using data with missing indicator 
+```{r}
+library(survey)
+library(tableone)
+
+pcos_dat_missind$antenatal_ab <- ifelse(pcos_dat_missind$antenatal_ab == "Yes", 1,0)
+
+pss_model_glm <- glm(antenatal_ab ~ age_cat + BMI_cat + smok_snuf_px + parity_cat + DM + PCOS + metformin_use + GDM + CS + size_GA + Gender + Bwt_cat + preconception, data = pcos_dat_missind, family = "binomial")
+
+# Extract propensity scores
+pss_missind <- predict(pss_model_glm, type = "response")
+pcos_dat_missind$pss <- pss_missind
+
+# Calculate IPW weights
+weights_missind <- rep(NA, length(pss_missind))
+weights_missind[pcos_dat_missind$antenatal_ab == 1] <- 1 / pss_missind[pcos_dat_missind$antenatal_ab == 1]
+weights_missind[pcos_dat_missind$antenatal_ab == 0] <- 1 / (1 - pss_missind[pcos_dat_missind$antenatal_ab == 0])
+
+weighted_survey_design_missind <- svydesign(ids = ~mlopnr, weights = ~weights_missind, data = pcos_dat_missind)
+
+## tables 
+covariates <- c("age_cat", "BMI_cat", "smok_snuf_px", "parity_cat", "DM", "PCOS", "metformin_use", "GDM", "CS", "size_GA", "Bwt_cat", "Gender", "preconception")
+unweighted_table_missind <- CreateTableOne(vars = covariates, strata = "antenatal_ab", data = pcos_dat_missind, test = FALSE, smd = TRUE)
+print(unweighted_table_missind, smd= TRUE)
+
+weighted_table_missind <- svyCreateTableOne(vars = covariates, strata = "antenatal_ab", data = weighted_survey_design_missind, test = FALSE, smd = TRUE)
+print(weighted_table_missind, smd = TRUE)
+
+## create plot
+unweighted_smd_missind <- ExtractSmd(unweighted_table_missind, varLabels = FALSE)
+weighted_smd_missind <- ExtractSmd(weighted_table_missind, varLabels = FALSE)
+covariate_names <- c("Age", "BMI", "Smoking/snuff", "Parity", "DM", "PCOS", "Metformin", "GDM", "CS", "LGA", "Birthweight", "Gender", "Preconception Ab", "Early-life Ab")
+smd_data_missind <- data.frame(covariate= covariate_names, unweighted_smd_missind= unweighted_smd_missind, weighted_smd_missind=weighted_smd_missind)
+
+  ggplot(smd_data_missind, aes(x = unweighted_smd_missind, y = reorder(covariate, unweighted_smd_missind), color = "Sample")) + 
+  geom_point() + 
+  geom_point(aes(x = weighted_smd_missind, color = "Weighted SMD")) +
+  geom_vline(xintercept = 0.1, linetype = "dashed") +
+  labs(x = "Standardized mean differences", y = "", color = "Sample") +
+  scale_color_manual(values = c("Sample" = "red", "Weighted SMD" = "blue"), 
+                     labels = c("Unweighted", "Weighted")) +
+  theme_minimal() +
+  ggtitle("Covariate balance before and after weighting") 
+```
+
+
+## Results of the propensity score model with missing indicator
+```{r}
+summary(pss_model_missind)
+exp(cbind(or = coef(pss_model_missind), confint(pss_model_missind)))
+```
+
+
+## Univariable models with missing indicator 
+```{r}
+
+# List of predictor variables
+predictor_vars <- c("age_cat", "BMI_cat_new", "smok_snuf_px", "parity_cat", "DM", 
+                    "PCOS", "metformin_use", "GDM", "CS", "size_GA", "Gender", 
+                    "Bwt_cat", "preconception", "antenatal_ab", "earlyAb_use")
+
+library(gtsummary)
+uni_pcos <- geeglm(obesity ~ earlyAb_use, family = "binomial", corstr = "exchangeable", id = mlopnr, data = pcos_dat_clean)
+tbl_regression(uni_pcos, exponentiate = T)
+```
+
+## Multivariable analysis of the association of PCOS and obesity
+```{r}
+pcos_dat_clean$BMI_cat_new <- factor(pcos_dat_clean$BMI_cat_new)
+pcos_dat_clean$BMI_cat_new <- relevel(pcos_dat_clean$BMI_cat_new, ref = "Normal_Underweight")
+
+PCOS_model <- geeglm(obesity ~ PCOS + age_cat + BMI_cat_new + parity_cat + smok_snuf_px + DM + metformin_use + GDM + size_GA + CS + Gender + preconception + antenatal_ab + earlyAb_use, family= "binomial", corstr = "exchangeable", id = mlopnr, data = pcos_dat_clean, std.err = "san.se")
+summary(PCOS_model)
+broom::tidy(PCOS_model, conf.int = T, exponentiate = T)
+
+# LR model
+PCOS_model_LR <- glm(obesity ~ PCOS + age_cat + BMI_cat_new + parity_cat + smok_snuf_px + DM + metformin_use + GDM + size_GA + CS + Gender + preconception + antenatal_ab + earlyAb_use, family= "binomial", data = pcos_dat_clean)
+```
+
+## Obesity by and sex of child
+```{r}
+PCOS_model_female <- geeglm(obesity ~ PCOS + age_cat + BMI_cat_new + parity_cat + smok_snuf_px + DM + metformin_use + GDM + size_GA + CS + preconception + antenatal_ab + earlyAb_use, family= "binomial", corstr = "exchangeable", id = mlopnr, std.err = "san.se", data = subset(pcos_dat_clean, Gender == "Female"))
+summary(PCOS_model_female)
+broom::tidy(PCOS_model_female, conf.int = T, exponentiate = T)
+
+PCOS_model_male <- geeglm(obesity ~ PCOS + age_cat + BMI_cat_new + parity_cat + smok_snuf_px + DM + metformin_use + GDM + size_GA + CS + preconception + antenatal_ab + earlyAb_use, family= "binomial", corstr = "exchangeable", id = mlopnr, std.err = "san.se", data = subset(pcos_dat_clean, Gender == "Male"))
+summary(PCOS_model_male)
+broom::tidy(PCOS_model_male, conf.int = T, exponentiate = T)
+
+
+# stratify by antibiotic status
+pcos_dat_clean$antenatal_ab <- factor(pcos_dat_clean$antenatal_ab)
+PCOS_model <- geeglm(obesity ~ PCOS + age_cat + BMI_cat_new + parity_cat + smok_snuf_px + DM + metformin_use + GDM + size_GA + CS + Gender + preconception + earlyAb_use, family= "binomial", corstr = "exchangeable", id = setid, std.err = "san.se", data = subset(pcos_dat_clean, antenatal_ab == "1"))
+summary(PCOS_model)
+broom::tidy(PCOS_model, conf.int = T, exponentiate = T)
+```
+
+
+
+
+
+
+
+
